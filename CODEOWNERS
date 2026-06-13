@@ -1,0 +1,11 @@
+# CODEOWNERS — Phase-1 immutability convention for the .devops/ contract (§1.3, D-008).
+#
+# The platform team owns the deployment template. Any change under /.devops/**
+# requires platform-team review. Phase 1 enforces this by convention (this file +
+# the .devops/README banner); Phase 2 adds branch protection that makes the
+# CODEOWNERS review on /.devops/** mandatory plus a template-drift CI check.
+#
+# Students own everything else (app/), and may edit only the four fields in
+# .devops/app-metadata.yaml.
+
+/.devops/   @UA-MIS/platform-team

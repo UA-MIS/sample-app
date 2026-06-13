@@ -1,0 +1,47 @@
+# preview overlay — ephemeral PR preview (§2.4). Smallest footprint (1 replica,
+# half-quota namespace). The preview ApplicationSet sets the image tag to
+# pull-<sha> at sync time. The Git-branch stand-in (D-009) provides the Phase-1
+# trigger, instantiated against namespace sample-pr-1.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Phase-1 preview stand-in namespace (D-009). The base Deployment requires Secret
+# sample-secret, so the overlay MUST ship a matching per-namespace SealedSecret
+# (sealedsecret.yaml, sealed for sample-pr-1) or preview pods won't start (SEC-004).
+# For the live PR generator the ApplicationSet templates sample-pr-<number> and a
+# real seal is needed per preview namespace — see .devops/README.md (Phase-2 wrinkle).
+namespace: sample-pr-1
+
+resources:
+  - ../../base
+  - sealedsecret.yaml
+
+labels:
+  - pairs:
+      platform.capstone/env: preview
+      platform.capstone/semester: 2026-fall
+    includeSelectors: false
+
+# Image seam: preview tracks the PR head build (promotion.yaml: preview=pull-<sha>).
+images:
+  - name: sample
+    newName: k3d-registry.localhost:5000/sample
+    newTag: preview
+
+replicas:
+  - name: sample
+    count: 1
+
+patches:
+  - target:
+      kind: Ingress
+      name: sample
+    # Preview host carries the PR number; the ApplicationSet substitutes <n>.
+    # Stand-in host for the sample-pr-1 D-009 proof / standalone render validation.
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: sample.sample.pr-1.127.0.0.1.sslip.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: sample.sample.pr-1.127.0.0.1.sslip.io

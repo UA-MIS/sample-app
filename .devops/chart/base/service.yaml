@@ -1,0 +1,16 @@
+# ClusterIP Service fronting the app pods. Traefik routes ingress traffic here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample
+  labels:
+    app.kubernetes.io/name: sample
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sample
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

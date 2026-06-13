@@ -1,0 +1,40 @@
+# dev overlay — tracks main, auto-synced by the env ApplicationSet (§2.3).
+# Image seam: dev follows the latest main build (promotion.yaml: dev=main digest).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sample-dev
+
+resources:
+  - ../../base
+  - sealedsecret.yaml
+
+# env-specific selector label (§3.1). semester comes from app-metadata via the
+# tenant; set here for the workload's own label contract.
+labels:
+  - pairs:
+      platform.capstone/env: dev
+      platform.capstone/semester: 2026-fall
+    includeSelectors: false
+
+# Image-tag SEAM (§4.1): the CI image-bump (T8) rewrites newTag here.
+images:
+  - name: sample
+    newName: k3d-registry.localhost:5000/sample
+    newTag: dev
+
+replicas:
+  - name: sample
+    count: 1
+
+patches:
+  - target:
+      kind: Ingress
+      name: sample
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: sample.sample.127.0.0.1.sslip.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: sample.sample.127.0.0.1.sslip.io

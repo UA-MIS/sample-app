@@ -1,0 +1,76 @@
+# Workload Deployment for the sample app.
+#
+# Image: the `image:` field is the GitOps image-tag SEAM (§4.1). The base pins a
+# placeholder; each overlay sets the registry/tag via a kustomize `images:`
+# override driven by promotion.yaml (dev=main digest, staging=tag, prod=gated tag).
+#
+# Secret: APP_SECRET is sourced from the in-namespace Secret `sample-secret`,
+# which the sealed-secrets controller produces by decrypting the committed
+# SealedSecret (§5.3, D-006). The app reads it and proves the read on "/".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample
+  labels:
+    app.kubernetes.io/name: sample
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sample
+    spec:
+      serviceAccountName: sample
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # SEAM: overlays override registry + tag via kustomize images:.
+          image: sample:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # Container port — single source is app-metadata.yaml (port: 8080).
+            - name: PORT
+              value: "8080"
+            # Proof-of-secret-path: value injected from the decrypted Secret.
+            - name: APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sample-secret
+                  key: app-secret
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

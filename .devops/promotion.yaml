@@ -1,0 +1,45 @@
+apiVersion: platform.capstone/v1
+# promotion.yaml — THE canonical single source of truth for the trigger→env→tag
+# mapping (architecture §4.1, D-011/ADR-008). This file lives in the app repo and
+# is read by BOTH consumers:
+#   - the local CI seam (.devops/ci/build-and-push.sh + bump-image.sh), and
+#   - the platform ApplicationSets, via an ArgoCD git-files generator pointed here.
+# There is NO duplicate in the platform-infra tenant template — both sides read
+# THIS file, so the schema below is the shared contract.
+#
+# To change "tag→staging" into "merge-to-release-branch→staging", edit one entry
+# here; nothing else changes. Reviewers/operators: look HERE first.
+
+# Image registry — the ONLY thing that changes when CI moves to Phase 2/Harbor.
+registry: k3d-registry.localhost:5000
+app: sample
+
+# Per-environment promotion rules. For each env:
+#   trigger        — the git event that promotes to this env (branch:main | tag:v* | pull_request)
+#   tagConvention  — the image-tag scheme build-and-push.sh computes:
+#                      sha-<short>  -> registry/app:<short-git-sha>
+#                      semver       -> registry/app:<X.Y.Z>   (provide SEMVER=)
+#                      pull-<sha>   -> registry/app:pull-<short-git-sha>
+#   overlay        — repo-relative path to the kustomize overlay the bump rewrites
+#   gate           — auto | manual ; manual = no ArgoCD automated sync (the prod gate)
+environments:
+  dev:
+    trigger: "branch:main"
+    tagConvention: "sha-<short>"
+    overlay: ".devops/chart/overlays/dev"
+    gate: auto
+  staging:
+    trigger: "tag:v*"
+    tagConvention: "semver"
+    overlay: ".devops/chart/overlays/staging"
+    gate: auto
+  prod:
+    trigger: "tag:v*"
+    tagConvention: "semver"
+    overlay: ".devops/chart/overlays/prod"
+    gate: manual
+  preview:
+    trigger: "pull_request"
+    tagConvention: "pull-<sha>"
+    overlay: ".devops/chart/overlays/preview"
+    gate: auto

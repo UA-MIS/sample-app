@@ -1,0 +1,10 @@
+# Never commit plaintext Secret manifests — only SealedSecrets are committed
+# (§5.3). The kubeseal workflow writes plaintext to /tmp; guard against stray
+# copies landing in the repo.
+*secret*.plain.yaml
+*-secret-plaintext.yaml
+/tmp-secret-*.yaml
+
+# Go build artifacts
+app/app
+*.test

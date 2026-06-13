@@ -1,0 +1,38 @@
+# staging overlay — tracks release tags, auto-synced by the env ApplicationSet
+# (§2.3). Image seam: staging follows the pushed semver tag (promotion.yaml:
+# staging=tags/v*).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sample-staging
+
+resources:
+  - ../../base
+  - sealedsecret.yaml
+
+labels:
+  - pairs:
+      platform.capstone/env: staging
+      platform.capstone/semester: 2026-fall
+    includeSelectors: false
+
+images:
+  - name: sample
+    newName: k3d-registry.localhost:5000/sample
+    newTag: staging
+
+replicas:
+  - name: sample
+    count: 2
+
+patches:
+  - target:
+      kind: Ingress
+      name: sample
+    patch: |
+      - op: replace
+        path: /spec/rules/0/host
+        value: sample.sample.staging.127.0.0.1.sslip.io
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: sample.sample.staging.127.0.0.1.sslip.io
