@@ -4,34 +4,28 @@
 # trigger, instantiated against namespace sample-pr-1.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 # Phase-1 preview stand-in namespace (D-009). The base Deployment requires Secret
 # sample-secret, so the overlay MUST ship a matching per-namespace SealedSecret
 # (sealedsecret.yaml, sealed for sample-pr-1) or preview pods won't start (SEC-004).
 # For the live PR generator the ApplicationSet templates sample-pr-<number> and a
 # real seal is needed per preview namespace — see .devops/README.md (Phase-2 wrinkle).
 namespace: sample-pr-1
-
 resources:
   - ../../base
   - sealedsecret.yaml
-
 labels:
   - pairs:
       platform.capstone/env: preview
       platform.capstone/semester: 2026-fall
     includeSelectors: false
-
 # Image seam: preview tracks the PR head build (promotion.yaml: preview=pull-<sha>).
 images:
   - name: sample
     newName: k3d-registry.localhost:5000/sample
-    newTag: preview
-
+    newTag: pull-30613c1
 replicas:
   - name: sample
     count: 1
-
 patches:
   - target:
       kind: Ingress
