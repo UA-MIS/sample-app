@@ -4,29 +4,23 @@
 # in the ApplicationSet/promotion.yaml. Image seam: prod=gated semver tag.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 namespace: sample-prod
-
 resources:
   - ../../base
   - sealedsecret.yaml
-
 labels:
   - pairs:
       platform.capstone/env: prod
       platform.capstone/semester: 2026-fall
     includeSelectors: false
-
 images:
   - name: sample
     newName: k3d-registry.localhost:5000/sample
-    newTag: prod
-
+    newTag: v0.1.0
 # Prod runs more replicas; quota ceiling is higher (§3.2).
 replicas:
   - name: sample
     count: 3
-
 patches:
   - target:
       kind: Ingress
