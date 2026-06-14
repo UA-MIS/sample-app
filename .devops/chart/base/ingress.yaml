@@ -1,8 +1,10 @@
 # Ingress for the app. Host pattern is <app>.<team>.${PLATFORM_DOMAIN}
-# (§5.2): the base carries the Phase-1 PLATFORM_DOMAIN (127.0.0.1.sslip.io) and
-# each overlay patches the host with its env prefix so the same manifest ports to
-# the real cluster by re-pointing PLATFORM_DOMAIN. TLS is served by Traefik from
-# the cert-manager wildcard cert for *.${PLATFORM_DOMAIN} (§5.1/§5.2).
+# (§5.2): the base carries the Phase-1 PLATFORM_DOMAIN (127-0-0-1.sslip.io) and is
+# the canonical/prod host; each non-prod overlay patches the host with its env
+# prefix so the same manifest ports to the real cluster by re-pointing
+# PLATFORM_DOMAIN. The dashed sslip.io form avoids the pr-<n> label colliding with
+# the dotted-IP octets. TLS is served by Traefik from the cert-manager wildcard
+# cert for *.${PLATFORM_DOMAIN} (§5.1/§5.2).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,8 +13,9 @@ metadata:
     app.kubernetes.io/name: sample
 spec:
   rules:
-    # Overlays patch this host (e.g. sample.sample.127.0.0.1.sslip.io for dev).
-    - host: sample.sample.127.0.0.1.sslip.io
+    # Base = canonical/prod host. Non-prod overlays patch in their env prefix
+    # (e.g. sample.sample.dev.127-0-0-1.sslip.io for dev).
+    - host: sample.sample.127-0-0-1.sslip.io
       http:
         paths:
           - path: /
@@ -24,4 +27,4 @@ spec:
                   name: http
   tls:
     - hosts:
-        - sample.sample.127.0.0.1.sslip.io
+        - sample.sample.127-0-0-1.sslip.io

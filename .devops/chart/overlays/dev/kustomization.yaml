@@ -28,7 +28,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.127.0.0.1.sslip.io
+        value: sample.sample.dev.127-0-0-1.sslip.io
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.127.0.0.1.sslip.io
+        value: sample.sample.dev.127-0-0-1.sslip.io
