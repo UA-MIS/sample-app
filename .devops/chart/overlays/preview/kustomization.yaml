@@ -15,6 +15,7 @@ namespace: sample-pr-1
 resources:
   - ../../base
   - sealedsecret.yaml
+  - harbor-pull.sealedsecret.yaml   # image-pull cred for SA imagePullSecrets:[harbor-pull] (#C3)
 
 labels:
   - pairs:
