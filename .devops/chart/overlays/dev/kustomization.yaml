@@ -5,7 +5,14 @@ kind: Kustomization
 namespace: sample-dev
 resources:
   - ../../base
+  # sample-secret placeholder (demonstrates the secret path; APP_SECRET in base is
+  # optional so a fresh repo with no secret still deploys — M4 zero-config).
   - sealedsecret.yaml
+  - harbor-pull.sealedsecret.yaml   # image-pull cred for SA imagePullSecrets:[harbor-pull] (#C3)
+  # capstone:secrets — The Process "Secrets" tab (capstone:seal-secret) appends
+  # per-key SealedSecrets here as `- ../../secrets/<key>.sealedsecret.yaml` (M3,
+  # ADR-029 §4.3). Keep this marker line last in resources: so the append is
+  # deterministic; do not remove it.
 # env-specific selector label (§3.1). semester comes from app-metadata via the
 # tenant; set here for the workload's own label contract.
 labels:
@@ -16,7 +23,7 @@ labels:
 # Image-tag SEAM (§4.1): the CI image-bump (T8) rewrites newTag here.
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: 9b08056
 replicas:
   - name: sample
@@ -28,7 +35,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.dev.127-0-0-1.sslip.io
+        value: sample.sample.dev.capstone.uamishub.com
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.dev.127-0-0-1.sslip.io
+        value: sample.sample.dev.capstone.uamishub.com

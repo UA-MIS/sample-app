@@ -14,7 +14,14 @@ namespace: sample-pr-1
 
 resources:
   - ../../base
+  # sample-secret placeholder (demonstrates the secret path; APP_SECRET in base is
+  # optional so a fresh repo with no secret still deploys — M4 zero-config).
   - sealedsecret.yaml
+  - harbor-pull.sealedsecret.yaml   # image-pull cred for SA imagePullSecrets:[harbor-pull] (#C3)
+  # capstone:secrets — The Process "Secrets" tab (capstone:seal-secret) appends
+  # per-key SealedSecrets here as `- ../../secrets/<key>.sealedsecret.yaml` (M3,
+  # ADR-029 §4.3). Keep this marker line last in resources: so the append is
+  # deterministic; do not remove it.
 
 labels:
   - pairs:
@@ -25,7 +32,7 @@ labels:
 # Image seam: preview tracks the PR head build (promotion.yaml: preview=pull-<sha>).
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: preview
 
 replicas:
@@ -41,7 +48,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.pr-1.127-0-0-1.sslip.io
+        value: sample.sample.pr-1.capstone.uamishub.com
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.pr-1.127-0-0-1.sslip.io
+        value: sample.sample.pr-1.capstone.uamishub.com
