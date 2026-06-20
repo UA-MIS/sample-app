@@ -44,11 +44,19 @@ spec:
             - name: PORT
               value: "8080"
             # Proof-of-secret-path: value injected from the decrypted Secret.
+            # optional: true makes this the SAME base for two cases (M4 zero-config):
+            #   - the sample app (ships the sample-secret placeholder) -> APP_SECRET
+            #     loads, the secret path is demonstrated;
+            #   - a freshly-scaffolded repo (no secret yet) -> the env is simply unset,
+            #     the pod still starts (no CreateContainerConfigError), so a new app
+            #     deploys with ZERO manual secret setup. Teams add secrets via The
+            #     Process "Secrets" tab (capstone:seal-secret) only when they need one.
             - name: APP_SECRET
               valueFrom:
                 secretKeyRef:
                   name: sample-secret
                   key: app-secret
+                  optional: true
           readinessProbe:
             httpGet:
               path: /healthz
