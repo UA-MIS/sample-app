@@ -14,8 +14,11 @@ labels:
     includeSelectors: false
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
-    newTag: v0.1.0
+    newName: harbor.capstone.uamishub.com/sample/sample
+    # Bare semver (NO 'v' prefix) — matches what CI pushes: resolve-image.sh strips
+    # the git tag's 'v' (refs/tags/v0.1.0 -> image tag 0.1.0). A v-prefixed newTag
+    # here would reference an image CI never pushed -> ImagePullBackOff.
+    newTag: 0.1.0
 replicas:
   - name: sample
     count: 2
@@ -26,7 +29,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.staging.127-0-0-1.sslip.io
+        value: sample.sample.staging.capstone.uamishub.com
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.staging.127-0-0-1.sslip.io
+        value: sample.sample.staging.capstone.uamishub.com

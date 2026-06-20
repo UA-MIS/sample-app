@@ -10,8 +10,13 @@ apiVersion: platform.capstone/v1
 # To change "tag→staging" into "merge-to-release-branch→staging", edit one entry
 # here; nothing else changes. Reviewers/operators: look HERE first.
 
-# Image registry — the ONLY thing that changes when CI moves to Phase 2/Harbor.
-registry: k3d-registry.localhost:5000
+# Image registry — the team's OWN Harbor project on the real cluster (Talos).
+# Form: harbor.<PLATFORM_DOMAIN>/<team-project>; the CI build pushes
+# <registry>/<app>:<tag> = harbor.capstone.uamishub.com/sample/sample:<tag>.
+# (Phase-1 used the k3d built-in registry k3d-registry.localhost:5000 — that host
+# does NOT exist on the real cluster, so a build against it never deploys. The
+# resolver logic is unchanged + unit-tested; only this value moves to Harbor.)
+registry: harbor.capstone.uamishub.com/sample
 app: sample
 
 # Per-environment promotion rules. For each env:

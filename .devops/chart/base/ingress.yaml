@@ -1,10 +1,11 @@
 # Ingress for the app. Host pattern is <app>.<team>.${PLATFORM_DOMAIN}
-# (§5.2): the base carries the Phase-1 PLATFORM_DOMAIN (127-0-0-1.sslip.io) and is
+# (§5.2): the base carries the real PLATFORM_DOMAIN (capstone.uamishub.com) and is
 # the canonical/prod host; each non-prod overlay patches the host with its env
-# prefix so the same manifest ports to the real cluster by re-pointing
-# PLATFORM_DOMAIN. The dashed sslip.io form avoids the pr-<n> label colliding with
-# the dotted-IP octets. TLS is served by Traefik from the cert-manager wildcard
-# cert for *.${PLATFORM_DOMAIN} (§5.1/§5.2).
+# prefix so the same manifest ports across clusters by re-pointing PLATFORM_DOMAIN.
+# TLS is served at the Cloudflare edge (Universal/Advanced cert for
+# *.capstone.uamishub.com); the tunnel publishes to in-cluster Traefik (§5.1/§5.2).
+# (Phase-1 used 127-0-0-1.sslip.io for the local k3d host; that does not resolve on
+# the real cluster — moved to the live domain so the deployed app is reachable.)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,8 +15,8 @@ metadata:
 spec:
   rules:
     # Base = canonical/prod host. Non-prod overlays patch in their env prefix
-    # (e.g. sample.sample.dev.127-0-0-1.sslip.io for dev).
-    - host: sample.sample.127-0-0-1.sslip.io
+    # (e.g. sample.sample.dev.capstone.uamishub.com for dev).
+    - host: sample.sample.capstone.uamishub.com
       http:
         paths:
           - path: /
@@ -27,4 +28,4 @@ spec:
                   name: http
   tls:
     - hosts:
-        - sample.sample.127-0-0-1.sslip.io
+        - sample.sample.capstone.uamishub.com
