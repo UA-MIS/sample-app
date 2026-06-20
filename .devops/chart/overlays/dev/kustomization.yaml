@@ -6,6 +6,7 @@ namespace: sample-dev
 resources:
   - ../../base
   - sealedsecret.yaml
+  - harbor-pull.sealedsecret.yaml   # image-pull cred for SA imagePullSecrets:[harbor-pull] (#C3)
 # env-specific selector label (§3.1). semester comes from app-metadata via the
 # tenant; set here for the workload's own label contract.
 labels:
