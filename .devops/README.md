@@ -27,7 +27,7 @@ Each overlay's `kustomization.yaml` has an `images:` block:
 ```yaml
 images:
   - name: sample
-    newName: harbor.capstone.uamishub.com/sample/sample
+    newName: k3d-registry.localhost:5000/sample
     newTag: dev          # <-- the seam the CI image-bump rewrites
 ```
 

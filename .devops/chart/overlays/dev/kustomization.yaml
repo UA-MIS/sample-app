@@ -16,7 +16,7 @@ labels:
 # Image-tag SEAM (§4.1): the CI image-bump (T8) rewrites newTag here.
 images:
   - name: sample
-    newName: harbor.capstone.uamishub.com/sample/sample
+    newName: k3d-registry.localhost:5000/sample
     newTag: 9b08056
 replicas:
   - name: sample

@@ -15,7 +15,7 @@ labels:
     includeSelectors: false
 images:
   - name: sample
-    newName: harbor.capstone.uamishub.com/sample/sample
+    newName: k3d-registry.localhost:5000/sample
     newTag: v0.1.0
 # Prod runs more replicas; quota ceiling is higher (§3.2).
 replicas:
