@@ -16,7 +16,7 @@ labels:
 # Image-tag SEAM (§4.1): the CI image-bump (T8) rewrites newTag here.
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: 9b08056
 replicas:
   - name: sample
@@ -28,7 +28,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.dev.127-0-0-1.sslip.io
+        value: sample.sample.dev.capstone.uamishub.com
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.dev.127-0-0-1.sslip.io
+        value: sample.sample.dev.capstone.uamishub.com

@@ -25,7 +25,7 @@ labels:
 # Image seam: preview tracks the PR head build (promotion.yaml: preview=pull-<sha>).
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: preview
 
 replicas:
@@ -41,7 +41,7 @@ patches:
     patch: |
       - op: replace
         path: /spec/rules/0/host
-        value: sample.sample.pr-1.127-0-0-1.sslip.io
+        value: sample.sample.pr-1.capstone.uamishub.com
       - op: replace
         path: /spec/tls/0/hosts/0
-        value: sample.sample.pr-1.127-0-0-1.sslip.io
+        value: sample.sample.pr-1.capstone.uamishub.com
