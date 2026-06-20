@@ -11,7 +11,14 @@ apiVersion: platform.capstone/v1
 # here; nothing else changes. Reviewers/operators: look HERE first.
 
 # Image registry — the ONLY thing that changes when CI moves to Phase 2/Harbor.
-registry: k3d-registry.localhost:5000
+# Talos/Harbor (D-026): per-team Harbor project keyed on the canonical <team> slug,
+# so images live at harbor.capstone.uamishub.com/<team>/<app>. This is the SINGLE
+# source of truth for the push destination AND the overlay newName (bump-image.sh
+# rewrites overlays[].newName = "<registry>/<app>" from here, so the overlays
+# self-heal to this value on the next build). The old k3d-registry.localhost:5000
+# was the Phase-1 local-cluster registry — unreachable on Talos (the "sample apps
+# don't deploy" root cause: CI pushed there + pods tried to pull from there).
+registry: harbor.capstone.uamishub.com/sample
 app: sample
 
 # Per-environment promotion rules. For each env:

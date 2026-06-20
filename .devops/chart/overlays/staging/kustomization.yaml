@@ -14,7 +14,7 @@ labels:
     includeSelectors: false
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: v0.1.0
 replicas:
   - name: sample

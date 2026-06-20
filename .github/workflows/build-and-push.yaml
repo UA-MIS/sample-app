@@ -10,7 +10,7 @@
 #   - Builds the app image with KANIKO (rootless, no docker daemon/socket) on the
 #     self-hosted ARC runners (runs-on: ua-mis-kaniko, containerMode:kubernetes,
 #     non-root). Kaniko is the rootless builder the no-privileged runner model needs.
-#   - Pushes to the team's OWN Harbor project: harbor.127-0-0-1.sslip.io/<name>/<app>
+#   - Pushes to the team's OWN Harbor project: harbor.capstone.uamishub.com/<name>/<app>
 #     (per-team project keyed on the canonical <name> slug, D-026), using the
 #     least-privilege PUSH robot secret `harbor-push` (pull+push on THIS project
 #     only) consumed at /kaniko/.docker/config.json.

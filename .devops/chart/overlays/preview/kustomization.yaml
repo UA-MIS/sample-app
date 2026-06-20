@@ -25,7 +25,7 @@ labels:
 # Image seam: preview tracks the PR head build (promotion.yaml: preview=pull-<sha>).
 images:
   - name: sample
-    newName: k3d-registry.localhost:5000/sample
+    newName: harbor.capstone.uamishub.com/sample/sample
     newTag: preview
 
 replicas:
