@@ -60,6 +60,13 @@ concurrency:
 jobs:
   build-and-push:
     runs-on: ua-mis-kaniko
+    # Expose the resolver's identity to the bump-dev job (consumed via
+    # needs.build-and-push.outputs.*) so the DEPLOYED tag == the BUILT tag with no
+    # recomputation/drift. TAG = the readable git-describe value (Deploy Model A).
+    outputs:
+      TAG: ${{ steps.resolve.outputs.TAG }}
+      ENV: ${{ steps.resolve.outputs.ENV }}
+      PUSH: ${{ steps.resolve.outputs.PUSH }}
     # REQUIRED by containerMode:kubernetes — every workflow job MUST declare a job
     # `container:` or the runner hard-fails at "Set up job" with "Jobs without a job
     # container are forbidden on this runner." (ARC k8s-mode: all workflows must use
@@ -80,6 +87,12 @@ jobs:
     steps:
       - name: Checkout (build context + promotion.yaml + resolver)
         uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 = full history + ALL TAGS. REQUIRED for resolve-image.sh's
+          # `git describe --tags` (Deploy Model A readable dev tag, e.g.
+          # v1.0.0-5-gabc123). The default depth=1 fetches NO tags → git describe
+          # degrades to a bare sha (--always), defeating Model A. (context7-verified.)
+          fetch-depth: 0
 
       - name: Resolve image identity from promotion.yaml
         id: resolve
@@ -137,49 +150,59 @@ jobs:
   # ============================================================================
   # bump-dev — the GitOps image-bump (D-030 automated promotion: push -> builds ->
   # DEPLOYS, hands-free). After build-and-push pushes the dev image, rewrite the
-  # dev overlay's images[].newTag to the just-pushed <short-sha> and commit it to
-  # main; ArgoCD sees the changed overlay and syncs the new image into sample-dev.
+  # dev overlay's images[].newTag to the just-built tag and commit it to main;
+  # ArgoCD sees the changed overlay and syncs the new image into <team>-dev.
   #
-  # SECURITY (least privilege — this is a SEPARATE job, NOT the build job):
-  #   - `if:` restricts it to a real push to the main branch. It NEVER runs on
-  #     pull_request, so UNTRUSTED student PR code can't reach the write token.
-  #   - job-scoped `permissions: contents: write` applies ONLY to this job; the
-  #     build-and-push job keeps the workflow-default `contents: read`.
-  #   - no pull_request_target anywhere; the only writer is post-merge trusted code.
-  #   - loop guard: bump-image.sh's commit message carries `[skip ci]`, so the
-  #     bump commit does NOT re-trigger build-and-push (no infinite build loop).
+  # Deploy Model A: the tag is the BUILD job's resolver output (TAG) — a readable
+  # `git describe --tags` value (e.g. v1.0.0-5-gabc123), NOT a bare SHA. We CONSUME
+  # needs.build-and-push.outputs.TAG (no recomputation) so the DEPLOYED tag is
+  # exactly the BUILT tag — zero drift.
+  #
+  # SECURITY (least privilege — SEPARATE job, NOT the build job):
+  #   - `if:` restricts to a real push to main. NEVER runs on pull_request, so
+  #     UNTRUSTED student PR code can't reach the write token.
+  #   - job-scoped `permissions: contents: write` applies ONLY here; build-and-push
+  #     keeps the workflow-default `contents: read`.
+  #   - no pull_request_target; the only writer is post-merge trusted code.
+  #   - loop guard: bump-image.sh's commit message carries `[skip ci]` → the bump
+  #     commit does NOT re-trigger build-and-push (no infinite build loop).
+  #
+  # BRANCH PROTECTION (Option A, D-030): main requires PRs, so a plain GITHUB_TOKEN
+  # push is rejected. The platform allowlists THIS CI automation identity in main's
+  # "bypass pull request allowances" (scoped to overlay-tag commits from this
+  # push-to-main-only job). One-time repo-admin config at onboarding/go-live — the
+  # workflow itself is unchanged (direct push). If the bypass isn't configured, the
+  # push fails LOUD (set -e) — never a silent no-deploy.
   # ============================================================================
   bump-dev:
     needs: build-and-push
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-and-push.outputs.PUSH == 'true' }}
     runs-on: ua-mis-kaniko
     container:
       image: node:24-trixie-slim
     permissions:
       contents: write
     steps:
-      - name: Checkout main (writable)
+      - name: Checkout main (writable; full history for a clean commit base)
         uses: actions/checkout@v4
         with:
           ref: main
-          # default GITHUB_TOKEN; job-scoped contents:write authorizes the push.
+          fetch-depth: 0
+          # default GITHUB_TOKEN; job-scoped contents:write + the Option-A bypass
+          # allowlist authorize the push to protected main.
           persist-credentials: true
 
-      - name: Resolve pushed image identity
-        id: resolve
-        run: |
-          sh .devops/ci/resolve-image.sh | tee -a "$GITHUB_OUTPUT"
-
-      - name: Bump dev overlay newTag -> pushed sha + commit (loop-guarded [skip ci])
-        if: ${{ steps.resolve.outputs.PUSH == 'true' }}
+      - name: Bump dev overlay newTag -> built git-describe tag + commit + push
         env:
+          TAG: ${{ needs.build-and-push.outputs.TAG }}
           GIT_AUTHOR_NAME: ua-mis-ci
           GIT_AUTHOR_EMAIL: ci@capstone.uamishub.com
           GIT_COMMITTER_NAME: ua-mis-ci
           GIT_COMMITTER_EMAIL: ci@capstone.uamishub.com
         run: |
           set -eu
-          # bump-image.sh (COMMIT=1) rewrites the dev overlay newTag + git-commits
-          # with a "[skip ci]" message (so this push does not re-trigger the build).
-          COMMIT=1 sh .devops/ci/bump-image.sh dev "${{ steps.resolve.outputs.TAG }}"
+          # CONSUME the build job's resolver TAG (readable git-describe; no recompute).
+          # bump-image.sh (COMMIT=1) rewrites the dev overlay newTag + git-commits with
+          # a "[skip ci]" message (so this push does NOT re-trigger build-and-push).
+          COMMIT=1 sh .devops/ci/bump-image.sh dev "${TAG}"
           git push origin HEAD:main
