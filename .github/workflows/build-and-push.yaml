@@ -167,28 +167,24 @@ jobs:
   #   - loop guard: bump-image.sh's commit message carries `[skip ci]` → the bump
   #     commit does NOT re-trigger build-and-push (no infinite build loop).
   #
-  # BRANCH PROTECTION + WRITE IDENTITY (Option A, D-030, sec-bumpjob #5):
-  #   main requires PRs, so a plain GITHUB_TOKEN push is rejected. The bump push is
-  #   authenticated by a GITHUB APP INSTALL TOKEN (NOT GITHUB_TOKEN, NOT a PAT) minted
-  #   per-run by actions/create-github-app-token and SCOPED DOWN to contents:write
-  #   ONLY (below the App's full install permissions — least privilege). The platform
-  #   allowlists ONLY THAT APP (`ua-mis-backstage[bot]`) in main's "bypass pull
-  #   request allowances" — not the broad github-actions[bot] — so only this scoped
-  #   automation actor can push the overlay-tag commit to protected main.
+  # BRANCH PROTECTION (Option A, D-030 — human risk-accepted github-actions[bot]):
+  #   main requires PRs, so a plain GITHUB_TOKEN push is rejected by default. The
+  #   platform allowlists the workflow's own actor `github-actions[bot]` in main's
+  #   "bypass pull request allowances", so this job's GITHUB_TOKEN (job-scoped
+  #   contents:write) can push the overlay-tag commit to protected main directly.
   #
-  #   Why an App install token, not GITHUB_TOKEN: GITHUB_TOKEN's actor is
-  #   github-actions[bot]; allowlisting that bypasses PRs for ALL workflow writes
-  #   (too broad for a verbatim every-tenant contract). A dedicated App actor keeps
-  #   the bypass surface to exactly this one identity, and the token is contents:write
-  #   only + expires in ~1h.
+  #   Residual risk (human-accepted 2026-06-21): allowlisting github-actions[bot]
+  #   lets ANY workflow on this repo bypass PR review — but only on the student's
+  #   OWN tenant repo (per-repo bypass, not org-wide), so the blast radius is one
+  #   team bypassing review on their own code. Acceptable for an edu platform, and
+  #   it avoids a per-tenant App-key secret (no secret hole, trivial to automate:
+  #   the scaffolder just enables protection + adds the bot to bypass via repo
+  #   config — no secret to seal). NO GitHub App / install token here on purpose.
   #
-  #   One-time repo/org-admin config at onboarding/go-live (NOT in this workflow):
-  #     - org Actions VAR  CI_BUMP_APP_ID            = the App's App ID
-  #     - org Actions SECRET CI_BUMP_APP_PRIVATE_KEY = the App's .pem
-  #     - add `ua-mis-backstage[bot]` to main's bypass-pull-request-allowances
-  #   For pre-existing sample-app: human does this once. Scaffolded tenants: the
-  #   scaffolder automates it (co-designed with m4-dev). If the bypass/secret isn't
-  #   configured, the run fails LOUD (set -e / token-mint error) — never a silent
+  #   One-time repo-admin config (sample-app, human; scaffolded tenants automated):
+  #     - require PRs on main
+  #     - add `github-actions[bot]` to main's bypass-pull-request-allowances
+  #   If the bypass isn't configured, the push fails LOUD (set -e) — never a silent
   #   no-deploy.
   # ============================================================================
   bump-dev:
@@ -197,29 +193,16 @@ jobs:
     runs-on: ua-mis-kaniko
     container:
       image: node:24-trixie-slim
-    # No `permissions: contents: write` here on purpose — the write is done by the
-    # App install token below, NOT GITHUB_TOKEN. Keep GITHUB_TOKEN at read-only.
     permissions:
-      contents: read
+      contents: write
     steps:
-      - name: Mint a contents:write-only App install token (least privilege)
-        id: app-token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ vars.CI_BUMP_APP_ID }}
-          private-key: ${{ secrets.CI_BUMP_APP_PRIVATE_KEY }}
-          # Scope the minted token DOWN to contents:write on THIS repo only —
-          # narrower than the App's full install perms (Administration/Workflows/PRs).
-          permission-contents: write
-
-      - name: Checkout main (writable via App token; full history for a clean base)
+      - name: Checkout main (writable; full history for a clean commit base)
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          # Use the scoped App install token (the bypass-allowlisted actor), NOT the
-          # default GITHUB_TOKEN — that's what authorizes the push to protected main.
-          token: ${{ steps.app-token.outputs.token }}
+          # default GITHUB_TOKEN; job-scoped contents:write + the Option-A bypass
+          # allowlist (github-actions[bot]) authorize the push to protected main.
           persist-credentials: true
 
       - name: Bump dev overlay newTag -> built git-describe tag + commit + push
