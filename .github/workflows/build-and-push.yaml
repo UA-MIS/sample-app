@@ -86,7 +86,9 @@ jobs:
       DOCKER_CONFIG_DIR: /kaniko/.docker
     steps:
       - name: Checkout (build context + promotion.yaml + resolver)
-        uses: actions/checkout@v4
+        # Digest-pinned (SEC, D-030): immutable SHA, not a mutable tag. A poisoned
+        # re-tag of v4 can't slip in. sha = actions/checkout v4.3.1.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # fetch-depth: 0 = full history + ALL TAGS. REQUIRED for resolve-image.sh's
           # `git describe --tags` (Deploy Model A readable dev tag, e.g.
@@ -116,7 +118,10 @@ jobs:
       # so we can (a) fail closed if a push build is missing its cred, and (b) build
       # vs. --no-push from the resolver's PUSH decision.
       - name: Build (and push) with Kaniko
-        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
+        # Digest-pinned (SEC, D-030): the Kaniko image holds the Harbor push cred, so
+        # pin it to an immutable digest — a re-tag of v1.23.2-debug can't inject a
+        # poisoned builder. digest = gcr.io/kaniko-project/executor:v1.23.2-debug.
+        uses: docker://gcr.io/kaniko-project/executor@sha256:c3109d5926a997b100c4343944e06c6b30a6804b2f9abe0994d3de6ef92b028e # v1.23.2-debug
         with:
           entrypoint: /busybox/sh
           args: >-
@@ -197,7 +202,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout main (writable; full history for a clean commit base)
-        uses: actions/checkout@v4
+        # Digest-pinned (SEC, ELEVATED for the WRITE job): this checkout runs in the
+        # bypass-holding job (github-actions[bot] can push to protected main), so a
+        # poisoned re-tag of v4 would inherit push-to-main. Pin to immutable SHA.
+        # sha = actions/checkout v4.3.1.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: main
           fetch-depth: 0
