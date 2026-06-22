@@ -60,6 +60,13 @@ concurrency:
 jobs:
   build-and-push:
     runs-on: ua-mis-kaniko
+    # Expose the resolver's identity to the bump-dev job (consumed via
+    # needs.build-and-push.outputs.*) so the DEPLOYED tag == the BUILT tag with no
+    # recomputation/drift. TAG = the readable git-describe value (Deploy Model A).
+    outputs:
+      TAG: ${{ steps.resolve.outputs.TAG }}
+      ENV: ${{ steps.resolve.outputs.ENV }}
+      PUSH: ${{ steps.resolve.outputs.PUSH }}
     # REQUIRED by containerMode:kubernetes — every workflow job MUST declare a job
     # `container:` or the runner hard-fails at "Set up job" with "Jobs without a job
     # container are forbidden on this runner." (ARC k8s-mode: all workflows must use
@@ -79,7 +86,15 @@ jobs:
       DOCKER_CONFIG_DIR: /kaniko/.docker
     steps:
       - name: Checkout (build context + promotion.yaml + resolver)
-        uses: actions/checkout@v4
+        # Digest-pinned (SEC, D-030): immutable SHA, not a mutable tag. A poisoned
+        # re-tag of v4 can't slip in. sha = actions/checkout v4.3.1.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          # fetch-depth: 0 = full history + ALL TAGS. REQUIRED for resolve-image.sh's
+          # `git describe --tags` (Deploy Model A readable dev tag, e.g.
+          # v1.0.0-5-gabc123). The default depth=1 fetches NO tags → git describe
+          # degrades to a bare sha (--always), defeating Model A. (context7-verified.)
+          fetch-depth: 0
 
       - name: Resolve image identity from promotion.yaml
         id: resolve
@@ -103,7 +118,10 @@ jobs:
       # so we can (a) fail closed if a push build is missing its cred, and (b) build
       # vs. --no-push from the resolver's PUSH decision.
       - name: Build (and push) with Kaniko
-        uses: docker://gcr.io/kaniko-project/executor:v1.23.2-debug
+        # Digest-pinned (SEC, D-030): the Kaniko image holds the Harbor push cred, so
+        # pin it to an immutable digest — a re-tag of v1.23.2-debug can't inject a
+        # poisoned builder. digest = gcr.io/kaniko-project/executor:v1.23.2-debug.
+        uses: docker://gcr.io/kaniko-project/executor@sha256:c3109d5926a997b100c4343944e06c6b30a6804b2f9abe0994d3de6ef92b028e # v1.23.2-debug
         with:
           entrypoint: /busybox/sh
           args: >-
@@ -133,3 +151,80 @@ jobs:
           IMAGE: ${{ steps.resolve.outputs.IMAGE }}
           PUSH: ${{ steps.resolve.outputs.PUSH }}
           DOCKER_CONFIG_DIR: ${{ env.DOCKER_CONFIG_DIR }}
+
+  # ============================================================================
+  # bump-dev — the GitOps image-bump (D-030 automated promotion: push -> builds ->
+  # DEPLOYS, hands-free). After build-and-push pushes the dev image, rewrite the
+  # dev overlay's images[].newTag to the just-built tag and commit it to main;
+  # ArgoCD sees the changed overlay and syncs the new image into <team>-dev.
+  #
+  # Deploy Model A: the tag is the BUILD job's resolver output (TAG) — a readable
+  # `git describe --tags` value (e.g. v1.0.0-5-gabc123), NOT a bare SHA. We CONSUME
+  # needs.build-and-push.outputs.TAG (no recomputation) so the DEPLOYED tag is
+  # exactly the BUILT tag — zero drift.
+  #
+  # SECURITY (least privilege — SEPARATE job, NOT the build job):
+  #   - `if:` restricts to a real push to main. NEVER runs on pull_request, so
+  #     UNTRUSTED student PR code can't reach the write token.
+  #   - job-scoped `permissions: contents: write` applies ONLY here; build-and-push
+  #     keeps the workflow-default `contents: read`.
+  #   - no pull_request_target; the only writer is post-merge trusted code.
+  #   - loop guard: bump-image.sh's commit message carries `[skip ci]` → the bump
+  #     commit does NOT re-trigger build-and-push (no infinite build loop).
+  #
+  # BRANCH PROTECTION (Option A, D-030 — human risk-accepted github-actions[bot]):
+  #   main requires PRs, so a plain GITHUB_TOKEN push is rejected by default. The
+  #   platform allowlists the workflow's own actor `github-actions[bot]` in main's
+  #   "bypass pull request allowances", so this job's GITHUB_TOKEN (job-scoped
+  #   contents:write) can push the overlay-tag commit to protected main directly.
+  #
+  #   Residual risk (human-accepted 2026-06-21): allowlisting github-actions[bot]
+  #   lets ANY workflow on this repo bypass PR review — but only on the student's
+  #   OWN tenant repo (per-repo bypass, not org-wide), so the blast radius is one
+  #   team bypassing review on their own code. Acceptable for an edu platform, and
+  #   it avoids a per-tenant App-key secret (no secret hole, trivial to automate:
+  #   the scaffolder just enables protection + adds the bot to bypass via repo
+  #   config — no secret to seal). NO GitHub App / install token here on purpose.
+  #
+  #   One-time repo-admin config (sample-app, human; scaffolded tenants automated):
+  #     - require PRs on main
+  #     - add `github-actions[bot]` to main's bypass-pull-request-allowances
+  #   If the bypass isn't configured, the push fails LOUD (set -e) — never a silent
+  #   no-deploy.
+  # ============================================================================
+  bump-dev:
+    needs: build-and-push
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build-and-push.outputs.PUSH == 'true' }}
+    runs-on: ua-mis-kaniko
+    container:
+      image: node:24-trixie-slim
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main (writable; full history for a clean commit base)
+        # Digest-pinned (SEC, ELEVATED for the WRITE job): this checkout runs in the
+        # bypass-holding job (github-actions[bot] can push to protected main), so a
+        # poisoned re-tag of v4 would inherit push-to-main. Pin to immutable SHA.
+        # sha = actions/checkout v4.3.1.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+          fetch-depth: 0
+          # default GITHUB_TOKEN; job-scoped contents:write + the Option-A bypass
+          # allowlist (github-actions[bot]) authorize the push to protected main.
+          persist-credentials: true
+
+      - name: Bump dev overlay newTag -> built git-describe tag + commit + push
+        env:
+          TAG: ${{ needs.build-and-push.outputs.TAG }}
+          GIT_AUTHOR_NAME: ua-mis-ci
+          GIT_AUTHOR_EMAIL: ci@capstone.uamishub.com
+          GIT_COMMITTER_NAME: ua-mis-ci
+          GIT_COMMITTER_EMAIL: ci@capstone.uamishub.com
+        run: |
+          set -eu
+          # CONSUME the build job's resolver TAG (readable git-describe; no recompute).
+          # bump-image.sh (COMMIT=1) rewrites the dev overlay newTag + git-commits with
+          # a "[skip ci]" message (so this push does NOT re-trigger build-and-push).
+          COMMIT=1 sh .devops/ci/bump-image.sh dev "${TAG}"
+          git push origin HEAD:main
