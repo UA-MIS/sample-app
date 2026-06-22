@@ -24,7 +24,7 @@ labels:
 images:
   - name: sample
     newName: harbor.capstone.uamishub.com/sample/sample
-    newTag: 9b08056
+    newTag: 329c707
 replicas:
   - name: sample
     count: 1
