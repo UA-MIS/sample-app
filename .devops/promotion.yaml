@@ -21,16 +21,22 @@ app: sample
 
 # Per-environment promotion rules. For each env:
 #   trigger        — the git event that promotes to this env (branch:main | tag:v* | pull_request)
-#   tagConvention  — the image-tag scheme build-and-push.sh computes:
-#                      sha-<short>  -> registry/app:<short-git-sha>
-#                      semver       -> registry/app:<X.Y.Z>   (provide SEMVER=)
+#   tagConvention  — the image-tag scheme resolve-image.sh computes:
+#                      git-describe -> registry/app:<git describe --tags> e.g.
+#                                      v1.0.0-5-gabc123 (5 commits past tag v1.0.0).
+#                                      Readable + monotonic (Deploy Model A: dev gets a
+#                                      legible tag, NOT a bare SHA). Needs a base tag —
+#                                      the scaffolder seeds v0.0.0 on repo creation; CI
+#                                      checkout MUST fetch tags (fetch-depth: 0) or
+#                                      describe degrades to a bare sha via --always.
+#                      semver       -> registry/app:<X.Y.Z>   (from a vX.Y.Z git tag)
 #                      pull-<sha>   -> registry/app:pull-<short-git-sha>
 #   overlay        — repo-relative path to the kustomize overlay the bump rewrites
 #   gate           — auto | manual ; manual = no ArgoCD automated sync (the prod gate)
 environments:
   dev:
     trigger: "branch:main"
-    tagConvention: "sha-<short>"
+    tagConvention: "git-describe"
     overlay: ".devops/chart/overlays/dev"
     gate: auto
   staging:
