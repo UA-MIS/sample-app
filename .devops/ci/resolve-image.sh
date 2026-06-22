@@ -23,7 +23,7 @@
 #
 # Trigger -> env (matches promotion.yaml `environments.*.trigger`):
 #   tag:v*        (refs/tags/vX.Y.Z) -> prod    (semver, immutable, gated)  PUSH
-#   branch:main   (refs/heads/main)  -> dev     (sha-<short>, mutable)      PUSH
+#   branch:main   (refs/heads/main)  -> dev     (git-describe, mutable)     PUSH
 #   pull_request                     -> preview (pull-<sha>, build-only)    NO PUSH
 #
 # NOTE on staging vs prod: both are driven by `tag:v*`. One `vX.Y.Z` tag builds ONE
@@ -56,6 +56,27 @@ short_sha() {
     printf '%s' "${SHA_FULL}" | cut -c1-7
   else
     git -C "${DEVOPS_DIR}/.." rev-parse --short=7 HEAD 2>/dev/null || echo "local"
+  fi
+}
+
+# git_describe — the Deploy-Model-A dev tag: a READABLE, monotonic image tag derived
+# from the nearest git tag, e.g. `v1.0.0-5-gabc123` (5 commits past v1.0.0). Beats a
+# bare SHA for legibility + ordering. Requires (a) a base tag — the scaffolder seeds
+# `v0.0.0` on repo creation — and (b) the CI checkout to FETCH TAGS (fetch-depth: 0),
+# else there are no tags to describe against. `--always` is the safety net: if the repo
+# genuinely has zero tags (e.g. checkout still shallow), it degrades to a bare short sha
+# rather than failing the build — but that defeats Model A's readable-tag goal, so the
+# seed + fetch-depth:0 are the real contract; --always is belt-and-suspenders.
+# `--dirty` is intentionally omitted (CI builds a clean checkout). Output is sanitized to
+# a valid docker tag (git-describe output is already [A-Za-z0-9._-], all tag-safe).
+git_describe() {
+  REPO_ROOT="${DEVOPS_DIR}/.."
+  if git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+    git -C "${REPO_ROOT}" describe --tags --always 2>/dev/null || short_sha
+  else
+    # No .git available (shouldn't happen on the runner pod after checkout) — fall back
+    # to the SHA the CI env provides so a tag is still emitted.
+    short_sha
   fi
 }
 
@@ -97,7 +118,7 @@ else
   # tagConvention is fixed per env in schema v1; map directly so the resolver
   # works with no yq inside the Kaniko image (kept in sync with promotion.yaml).
   case "${ENV}" in
-    dev) TAG_CONV="sha-<short>" ;;
+    dev) TAG_CONV="git-describe" ;;
     prod) TAG_CONV="semver" ;;
     preview) TAG_CONV="pull-<sha>" ;;
     *) TAG_CONV="" ;;
@@ -113,6 +134,7 @@ done
 
 # ---- 3) resolve the tagConvention into the concrete tag --------------------
 case "${TAG_CONV}" in
+  "git-describe") TAG="$(git_describe)" ;;
   "sha-<short>") TAG="$(short_sha)" ;;
   "pull-<sha>")  TAG="pull-$(short_sha)" ;;
   "semver")
