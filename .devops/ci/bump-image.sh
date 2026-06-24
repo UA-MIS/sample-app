@@ -57,10 +57,16 @@ echo "==> overlay now pins:"
 yq '.images' "${KUSTOMIZATION}"
 
 # The GitOps signal: commit the overlay change so ArgoCD reconciles it.
+# NOTE the `[skip ci]` in the commit message: when the CI bump job (build-and-push.yaml,
+# push-to-main) runs this with COMMIT=1, the resulting commit must NOT re-trigger
+# build-and-push (which is `on: push: branches: [main]`) — otherwise every build bumps
+# the overlay, which pushes a commit, which triggers another build = an infinite loop.
+# GitHub Actions skips a workflow run when the head commit message contains `[skip ci]`.
+# (Harmless for the local/manual path — it's just a commit-message tag.)
 if [ "${COMMIT:-0}" = "1" ]; then
   echo "==> committing bump (GitOps signal)"
   git -C "${REPO_DIR}" add "${KUSTOMIZATION}"
-  git -C "${REPO_DIR}" commit -m "ci: bump ${ENV} image to ${NEW_TAG}" \
+  git -C "${REPO_DIR}" commit -m "ci: bump ${ENV} image to ${NEW_TAG} [skip ci]" \
     && echo "committed. ArgoCD will sync ${ENV} on next reconcile." \
     || echo "nothing to commit (tag unchanged)."
 else
