@@ -138,6 +138,10 @@ jobs:
                     --dockerfile=Dockerfile
                     --destination=${IMAGE}
                     --reproducible
+                    --snapshot-mode=redo
+                    --compressed-caching=false
+                    --use-new-run
+                    --push-retry=3
                     --verbosity=info";
             if [ "${PUSH}" = "true" ]; then
               echo "==> building + pushing ${IMAGE}";
